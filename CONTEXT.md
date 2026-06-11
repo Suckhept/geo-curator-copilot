@@ -100,6 +100,93 @@ network (SDK по умолчанию всегда бьёт в mainnet-RPC — э
 5. MCP live-режим и поиск по имени на postgraphile (фильтр
    name.includesInsensitive — TENTATIVE, не проверен).
 
+## СТАТУС ПИЛОТА №1 (2026-06-11): ПЕРЕОПУБЛИКОВАН кодеком 0.4.1, ждёт голоса
+
+- ДЕЙСТВУЮЩИЙ proposal `7d117259183042198e036e6ad6fe974c`:
+  tx `0xef1361bbb1f60ca4e8249207ed86ad0c012fc53fff038665322a924107dc6ce4`,
+  блок 147082, SUCCESS. cid
+  `ipfs://bafkreico3d2qkecjlgojxqkcunplqw6ssq4rsgoczicqaqqrrleaqi43re`,
+  editId `94e2d7f2c9834d2eb8b33b99a048501e`. Контент проверен: бинарник из
+  IPFS декодится кодеком 0.4.1 (61 ops), индексер показывает настоящее имя
+  edit-а => «Encoding error» во фронте исправлен. Кворум 1 голос editor,
+  окно 24 ч (до ~2026-06-12 09:50 UTC).
+  Мониторинг: GET /proposals/7d117259183042198e036e6ad6fe974c/status.
+- ПЕРВЫЙ proposal `7e66ee0bdd214c709bf508492ee49319` (tx 0x80bda831…, блок
+  147081) — контент в битой кодировке 0.33, фронт его не читает; брошен,
+  истечёт сам ~2026-06-12 09:32 UTC. Не голосовать за него.
+- Пилот №2 (Crypto, tier all) — только после принятия №1 и явного «да».
+
+## Находки сессии 2026-06-11 (раскопки публикации, всё проверено live)
+
+**Identity пользователя на TESTNET_V2-стеке** (чейн 19411, testnet-RPC):
+- Реальный Geo-аккаунт = Safe-прокси `0xe232AC6533201e12304bCfe694d4EDC56b8c9285`
+  (поле Accounts профиля). VERSION 1.4.1, threshold 1,
+  owner = EOA из GEO_PRIVATE_KEY (`0x0157d12f96363A388091252C9b73cF7bAfA27704`).
+- masterCopy НЕканонический: `0x639245e8476e03e789a244f279b5843b9633b2e7`
+  (кастомный деплой Safe 1.4.1 на Geo-чейне) → counterfactual-вычисление
+  SDK даёт ДРУГОЙ адрес (`0xD073…04DF`) — не использовать.
+- Включён 4337-модуль `0x75cf11467937ce3F2f357CE24ffc3DBF8fD5c226` (он же
+  fallback handler). ЛОВУШКА: адрес совпадает с каноническим Safe4337Module
+  v0.2.0 (EP 0.6), но это кастомная сборка под EntryPoint **0.7**
+  (`SUPPORTED_ENTRYPOINT()` = `0x0000000071727De2…a032`) — конфигурить
+  permissionless строго под EP 0.7, с 0.6 validateUserOp ревертит.
+- Личный спейс Safe: `dc306031c372ade013965c9ae22ad474`
+  (SpaceRegistry.addressToSpaceId). В Crypto datasets `5908…17e4` он
+  **member, НЕ editor** (editors 18 шт.) → edit пойдёт как proposal
+  через governance, не применится мгновенно.
+
+**Инфраструктура публикации TESTNET_V2:**
+- Роута `/space/{id}/edit/calldata` на testnet-api НЕТ (404; подтверждено
+  по `/openapi`) — Encoding.getEditCalldata из SDK 0.33 мёртв для этого стека.
+  Есть только `/ipfs/upload-edit` (+ proposals/profile/search/versioned).
+- Calldata собирается клиентски как GOVERNANCE-PROPOSAL (не EDITS_PUBLISHED —
+  тот принимается только от самого спейса, для чужого даёт InvalidAction()
+  0x4a7f394f). Формат (раскопан из собственных tx пользователя, проверен
+  eth_call-симуляцией; реализован в publish.ts):
+  `SpaceRegistry.enter(fromSpaceId=личный спейс, toSpaceId=цель,
+  action=0xcf4356ed126c00d2e547ace2f69991a972d322b45371d61ce5478b1cb9acb4c2,
+  topic=proposalId(bytes16, влево в bytes32), payload, sig=0x)` на
+  `0xB01683b2f0d38d43fcD4D9aAB980166988924132` (есть ТОЛЬКО на 19411).
+  payload = abi(bytes16 proposalId, uint256 proposalType, (address,uint256,
+  bytes)[] actions), один action = вызов DaoSpace.publish(0x0,
+  abi(string cid), 0x) (селектор 0x6b47f61a) на адрес контракта спейса
+  (spaceIdToAddress). proposalType: 0 = member-proposal (на голосование
+  editors) — наш случай; 1 = editor (авто-исполняется), для member ревертит
+  0x196f9913. Голос editors: action 0x4ebf5f29…, payload (proposalId, 1).
+- Чейны: genesis 80451 (Safe-фабрика 1.4.1 есть, SpaceRegistry НЕТ),
+  testnet 19411 (SpaceRegistry есть, канонической Safe-фабрики НЕТ).
+- Бандлер Pimlico для 19411 РАБОТАЕТ: `https://api.pimlico.io/v2/19411/rpc`
+  с дефолтным ключом SDK (`pim_KqHm63txxhbCYjdDaWaHqH`, gas-limited);
+  eth_supportedEntryPoints = [0.6, 0.7, …], gas-price отвечает.
+- `getSmartAccountWalletClient` SDK 0.33 принимает ТОЛЬКО {privateKey, rpcUrl},
+  жёстко: chain 80451 + бандлер v2/80451 + counterfactual Safe → для testnet
+  непригоден. Нижележащий `toSafeSmartAccount` (permissionless) принимает
+  `address` готового Safe — путь: toSafeSmartAccount({address: 0xe232…,
+  entryPoint 0.7}) + бандлер v2/19411 (опция --safe-address / GEO_SAFE_ADDRESS;
+  реализовано в publish.ts: publishEditViaSafe, dry-run делает eth_call-
+  симуляцию enter() от имени Safe). Спонсорство Pimlico на 19411 подтверждено
+  (pm_sponsorUserOperation подписал userOp при prepareUserOperation).
+- Балансы на 19411: EOA и Safe по 0 ETH → без спонсорства бандлера
+  не публикуем (с голого EOA не публиковать — права у Safe).
+
+## Грабля: кодировка edit (вскрыта после публикации пилота, 2026-06-11)
+
+- Проявление: geobrowser на странице proposal показывает «Encoding error —
+  The edit data failed validation and cannot be decoded»; tx и proposal ок.
+- Причина: `Ipfs.publishEdit` из @graphprotocol/grc-20@0.33 кодирует GRC2
+  со СТАРЫМ wire-форматом ops (поколение @geoprotocol/grc-20 0.1.x). Фронт
+  TESTNET_V2 декодит кодеком 0.4.x: на нашем файле он падает
+  (`[E005] unexpected end of input`), эталонные edits geobrowser читает
+  (73 ops). Оба формата носят magic `GRC2` — отличить можно только декодом.
+- Фикс (publish.ts): @geoprotocol/grc-20 поднят до ^0.4.1; ops собираются
+  только его билдерами (deleteEntity/deleteRelation/createRelation);
+  edit = createEdit({id, name, author=Id ЛИЧНОГО СПЕЙСА (не адрес!),
+  createdAt в МИКРОсекундах, ops}) -> encodeEdit -> decodeEdit (само-проверка)
+  -> POST FormData('file') на {origin}/ipfs/upload-edit -> ipfs://CID.
+  parseId 0.4.1 лоялен к не-RFC прод-ID (lenientId-хак больше не нужен).
+- Первый proposal 7e66ee0b… с битым контентом: не трогаем, истечёт сам
+  (24 ч). Перепубликация — новым кодеком после подтверждения пользователя.
+
 ## Гардрейлы
 
 См. RUNBOOK.md. Ключевые: GEO_PRIVATE_KEY только из env и никогда не
