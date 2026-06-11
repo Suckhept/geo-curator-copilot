@@ -5,86 +5,139 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Geo Check — duplicate QA for Geo knowledge graphs</title>
 <meta name="description" content="Open-source dedup engine and curator copilot for Geo (geobrowser.io, GRC-20). Scan a space, find duplicate entities, publish governance-ready merge proposals.">
+<link rel="preconnect" href="https://rsms.me/">
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
 <style>
-  :root { --bg:#0b0e14; --card:#131826; --line:#222a3d; --text:#e6ebf5; --dim:#8b95ab; --acc:#5b8cff; --ok:#34d399; --warn:#fbbf24; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  .wrap { max-width:880px; margin:0 auto; padding:0 20px; }
-  header { padding:72px 0 36px; }
-  h1 { font-size:42px; line-height:1.15; margin:0 0 14px; }
-  h1 .acc { color:var(--acc); }
-  .sub { color:var(--dim); font-size:19px; max-width:640px; }
-  h2 { font-size:24px; margin:48px 0 16px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px 24px; margin:14px 0; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; }
-  .stat { text-align:center; padding:18px 8px; }
-  .stat b { display:block; font-size:32px; color:var(--acc); }
-  .stat span { color:var(--dim); font-size:14px; }
-  .badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:13px; border:1px solid var(--line); }
-  .badge.ok { color:var(--ok); border-color:var(--ok); }
-  .badge.warn { color:var(--warn); border-color:var(--warn); }
-  code, .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:14px; }
-  input[type=text] { width:100%; padding:12px 14px; border-radius:8px; border:1px solid var(--line); background:#0d1120; color:var(--text); font-family:ui-monospace,monospace; font-size:14px; }
-  button { margin-top:12px; padding:11px 22px; border-radius:8px; border:0; background:var(--acc); color:#fff; font-size:15px; font-weight:600; cursor:pointer; }
-  button:disabled { opacity:.5; cursor:wait; }
-  table { width:100%; border-collapse:collapse; font-size:14px; }
-  td, th { padding:7px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
-  th { color:var(--dim); font-weight:600; }
-  .dim { color:var(--dim); }
-  footer { padding:48px 0 56px; color:var(--dim); font-size:14px; }
-  a { color:var(--acc); text-decoration:none; }
-  #scan-result { display:none; }
+  :root {
+    --bg: #0e0e0e;
+    --surface: #161616;
+    --line: #262626;
+    --hairline: #1f1f1f;
+    --text: #f0f0f0;
+    --dim: #8a8a8a;
+    --green: #58b388;
+    --green-line: rgba(88, 179, 136, .4);
+    --amber: #c9a86a;
+    --amber-line: rgba(201, 168, 106, .4);
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html { font-family: Inter, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+  @supports (font-variation-settings: normal) { html { font-family: InterVariable, Inter, -apple-system, sans-serif; } }
+  body { margin: 0; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px; }
+
+  header { padding: 96px 0 64px; }
+  h1 { font-size: 44px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.1; margin: 0 0 20px; }
+  .sub { color: var(--dim); font-size: 17px; max-width: 620px; margin: 0; }
+  .sub a { color: var(--text); }
+
+  .label { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); margin: 56px 0 14px; }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px 28px; margin: 0 0 14px; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0; }
+  .stats > div { padding: 8px 16px; border-left: 1px solid var(--line); }
+  .stats > div:first-child { border-left: 0; padding-left: 0; }
+  .stats b { display: block; font-size: 30px; font-weight: 600; letter-spacing: -0.02em; }
+  .stats span { color: var(--dim); font-size: 13px; }
+
+  .pill { display: inline-block; padding: 1px 11px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; font-weight: 500; color: var(--dim); white-space: nowrap; }
+  .pill.green { color: var(--green); border-color: var(--green-line); }
+  .pill.amber { color: var(--amber); border-color: var(--amber-line); }
+
+  .bar { height: 4px; background: var(--line); border-radius: 999px; overflow: hidden; margin: 10px 0 6px; }
+  .bar i { display: block; height: 100%; background: var(--green); border-radius: 999px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  td a { color: var(--text); text-decoration: none; border-bottom: 1px solid var(--line); }
+  td a:hover { border-bottom-color: var(--dim); }
+
+  input[type="text"] { width: 100%; padding: 11px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13.5px; outline: none; }
+  input[type="text"]:focus { border-color: #3a3a3a; }
+  input[type="checkbox"] { accent-color: var(--green); }
+
+  button { padding: 9px 18px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--text); font-size: 14px; font-weight: 500; font-family: inherit; cursor: pointer; }
+  button:hover { border-color: #3a3a3a; }
+  button.primary { background: var(--text); border-color: var(--text); color: #0e0e0e; }
+  button.primary:hover { background: #fff; }
+  button:disabled { opacity: .45; cursor: default; }
+
+  .dim { color: var(--dim); }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  h3 { font-size: 15px; font-weight: 600; margin: 28px 0 10px; }
+  h3 .pill { margin-left: 8px; }
+  ol { margin: 0; padding-left: 20px; }
+  ol li { margin: 6px 0; }
+  ol b { font-weight: 600; }
+  footer { padding: 72px 0 64px; color: var(--dim); font-size: 13.5px; border-top: 1px solid var(--hairline); margin-top: 72px; }
+  footer a { color: var(--dim); }
+  #scan-result { display: none; }
+  #export { display: none; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
 <header>
-  <h1>Geo Check<br><span class="acc">duplicate QA for Geo knowledge graphs</span></h1>
+  <h1>Duplicate QA for<br>Geo knowledge graphs</h1>
   <p class="sub">An open-source curator copilot for <a href="https://www.geobrowser.io" rel="noopener">Geo</a> (GRC-20).
   It scans a space, scores duplicate entities with URL-identity and relation-shape signals,
   and turns confirmed clusters into governance-ready merge proposals.</p>
 </header>
 
-<h2>Pilot case study — receipts first</h2>
+<div class="label">Pilot case study</div>
 <div class="card">
-  <div class="grid">
-    <div class="stat"><b>16,800+</b><span>entities scanned (Crypto + Crypto datasets)</span></div>
-    <div class="stat"><b>618</b><span>auto-confirmed duplicates found</span></div>
-    <div class="stat"><b>306</b><span>clusters across two flagship spaces</span></div>
-    <div class="stat"><b>56</b><span>merges in the live pilot proposal</span></div>
+  <div class="stats">
+    <div><b>31,800+</b><span>entities scanned</span></div>
+    <div><b>1,160</b><span>duplicates confirmed</span></div>
+    <div><b>561</b><span>clusters across two flagship spaces</span></div>
+    <div><b>56</b><span>merges in the live pilot proposal</span></div>
   </div>
 </div>
 <div class="card">
-  <b>Live pilot proposal</b> — merge 56 duplicate entities in <span class="mono">Crypto datasets</span>
-  <div id="proposal" class="dim" style="margin-top:8px">loading status…</div>
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <div style="font-weight:600">Dedup pilot v2 — merge 56 duplicate entities</div>
+      <div class="dim" style="font-size:13.5px">Crypto datasets · proposed from a member account</div>
+    </div>
+    <span class="pill" id="proposal-chip">…</span>
+  </div>
+  <div id="proposal-body" class="dim" style="font-size:13.5px; margin-top:10px">loading status…</div>
 </div>
 
-<h2>Try it — scan a space</h2>
+<div class="label">Scan a space</div>
 <div class="card">
-  <p class="dim" style="margin-top:0">Pick a flagship space (full nightly scan, instant) or paste any Geo space id (32-hex; live scan capped at 3,000 entities, queued — check back in a minute or two).</p>
-  <p style="margin:6px 0 10px">
+  <p class="dim" style="margin-top:0">Pick a flagship space — full nightly scan, served instantly — or paste any Geo space id.
+  Live scans are capped at 3,000 entities and queued.</p>
+  <div class="row" style="margin-bottom:14px">
     <button class="preset" data-space="5908c73ad336472ccbd983491d2d17e4">Crypto datasets</button>
     <button class="preset" data-space="c9f267dcb0d270718c2a3c45a64afd32">Crypto</button>
-  </p>
+  </div>
   <input type="text" id="space" value="5908c73ad336472ccbd983491d2d17e4" spellcheck="false">
-  <button id="go">Scan space</button>
-  <button id="export" style="display:none;background:#26334d">Export plan (.json)</button>
-  <div id="scan-result" class="card" style="margin-top:16px"></div>
+  <div class="row" style="margin-top:14px">
+    <button class="primary" id="go">Scan space</button>
+    <button id="export">Export plan (.json)</button>
+  </div>
+  <div id="scan-result" style="margin-top:24px"></div>
 </div>
 
-<h2>How it works</h2>
+<div class="label">How it works</div>
 <div class="card">
-  <ol style="margin:0; padding-left:20px">
+  <ol>
     <li><b>Snapshot</b> — cursor-paginated GraphQL pull of the space (both Geo API dialects).</li>
     <li><b>Score</b> — two-tier URL identity (report URLs vs profile links), name normalization, relation-shape conflicts; transitive clustering only over ≥0.9 edges.</li>
-    <li><b>Fix plan</b> — deleteEntity / replaceRelation ops with advisory skips; governance-proposal entities are always protected.</li>
-    <li><b>Publish</b> — GRC2 binary edit (codec 0.4.x) → IPFS → SpaceRegistry proposal from your Geo smart account; editors vote, the merge applies.</li>
+    <li><b>Guard</b> — schema entities (types and property definitions) and governance proposals are never auto-merged, only flagged for review.</li>
+    <li><b>Publish</b> — GRC2 binary edit → IPFS → SpaceRegistry proposal from your Geo account; editors vote, the merge applies.</li>
   </ol>
 </div>
 
 <footer>
-  Geo Check / Geo Curator Copilot — built by <a href="https://www.geobrowser.io">Geo</a> community member Saurois.
+  Geo Check / Geo Curator Copilot — built by Geo community member Saurois.
   Pilot proposals are published from a regular member account and applied through space governance.
 </footer>
 </div>
@@ -97,19 +150,27 @@ function esc(s) {
 }
 
 async function loadProposal() {
-  const el = document.getElementById('proposal');
+  const chip = document.getElementById('proposal-chip');
+  const body = document.getElementById('proposal-body');
   try {
     const r = await fetch('/api/proposal/' + PROPOSAL_ID);
     const j = await r.json();
-    const badge = j.status === 'PROPOSED' ? 'warn' : 'ok';
+    const accepted = ['ACCEPTED', 'EXECUTED', 'APPROVED'].includes(j.status);
+    chip.textContent = accepted ? 'Accepted' : (j.status === 'PROPOSED' ? 'Pending' : esc(j.status));
+    chip.className = 'pill' + (accepted ? ' green' : '');
+    const q = j.quorum || { current: 0, required: 1 };
+    const pct = Math.min(100, Math.round((q.current / Math.max(1, q.required)) * 100));
     const hours = j.timing && j.timing.timeRemaining > 0 ? (j.timing.timeRemaining / 3600).toFixed(1) : 0;
-    el.innerHTML =
-      '<span class="badge ' + badge + '">' + esc(j.status) + '</span> ' +
-      '<span class="mono">' + esc(j.proposalId) + '</span><br>' +
-      'votes: yes ' + esc(j.votes?.yes) + ' / no ' + esc(j.votes?.no) +
-      ' · quorum ' + esc(j.quorum?.current) + '/' + esc(j.quorum?.required) +
-      (j.timing?.isVotingEnded ? ' · voting ended' : ' · ' + hours + 'h left');
-  } catch (e) { el.textContent = 'status unavailable: ' + e.message; }
+    body.innerHTML =
+      'Quorum ' + q.current + ' of ' + q.required + ' editor votes' +
+      (j.timing?.isVotingEnded ? ' · voting ended' : ' · ' + hours + 'h left') +
+      ' · <span class="mono">' + esc(j.proposalId) + '</span>' +
+      '<div class="bar"><i style="width:' + pct + '%"></i></div>' +
+      'yes ' + esc(j.votes?.yes) + ' · no ' + esc(j.votes?.no) + ' · abstain ' + esc(j.votes?.abstain);
+  } catch (e) {
+    chip.textContent = 'Unavailable';
+    body.textContent = 'status unavailable: ' + e.message;
+  }
 }
 loadProposal();
 
@@ -124,34 +185,35 @@ function render(j) {
   lastScan = j;
   const out = document.getElementById('scan-result');
   const auto = j.autoClusters || [];
-  let html = '<b>' + j.scannedEntities + '</b> entities scanned' +
-    (j.truncated ? ' <span class="badge warn">capped at 3000</span>' : '') +
-    (j.precomputed ? ' <span class="badge ok">full nightly scan</span> <span class="dim">' + esc(j.generatedAt) + '</span>'
-                   : ' <span class="dim">live, ' + esc(j.generatedAt) + '</span>');
+  let html = '<div class="row">' +
+    '<span class="pill">' + j.scannedEntities.toLocaleString('en') + ' entities</span>' +
+    (j.truncated ? '<span class="pill amber">capped at 3,000</span>' : '') +
+    (j.precomputed ? '<span class="pill green">full nightly scan</span>' : '<span class="pill">live scan</span>') +
+    '<span class="dim" style="font-size:13px">' + esc(j.generatedAt) + '</span></div>';
 
-  html += '<h3 style="margin:18px 0 6px">Duplicates (auto-merge, &ge;0.9) — ' + auto.length + ' clusters</h3>';
+  html += '<h3>Duplicates <span class="pill green">auto-merge · score ≥ 0.9</span> <span class="pill">' + auto.length + ' clusters</span></h3>';
   if (auto.length) {
     html += '<table><tr><th></th><th>keep (canonical)</th><th>merge into it</th></tr>';
     auto.slice(0, MAX_RENDERED_CLUSTERS).forEach((c, i) => {
-      html += '<tr><td><input type="checkbox" class="pick" data-i="' + i + '" checked></td>' +
+      html += '<tr><td style="width:28px"><input type="checkbox" class="pick" data-i="' + i + '" checked></td>' +
         '<td>' + entLink(j.spaceId, c.canonical) + '</td><td>' +
-        c.duplicates.map(d => '<span class="badge ok">' + d.score.toFixed(2) + '</span> ' + entLink(j.spaceId, d)).join('<br>') +
+        c.duplicates.map(d => '<span class="pill green">' + d.score.toFixed(2) + '</span> ' + entLink(j.spaceId, d)).join('<br>') +
         '</td></tr>';
     });
     html += '</table>';
     if (auto.length > MAX_RENDERED_CLUSTERS) {
-      html += '<p class="dim">…showing first ' + MAX_RENDERED_CLUSTERS + ' of ' + auto.length + ' clusters; Export includes only checked (visible) ones.</p>';
+      html += '<p class="dim" style="font-size:13px">Showing first ' + MAX_RENDERED_CLUSTERS + ' of ' + auto.length + ' clusters; export includes only checked (visible) ones.</p>';
     }
   } else { html += '<p class="dim">none</p>'; }
 
   const review = j.reviewPairs || [];
-  html += '<h3 style="margin:18px 0 6px">Needs review (&lt;0.9) — ' + review.length + ' pairs</h3>';
+  html += '<h3>Needs review <span class="pill">score &lt; 0.9 · never auto-merged</span> <span class="pill">' + review.length + ' pairs</span></h3>';
   if (review.length) {
-    html += '<table><tr><th>score</th><th>pair</th></tr>';
+    html += '<table><tr><th style="width:110px">score</th><th>pair</th></tr>';
     for (const p of review.slice(0, 50)) {
-      html += '<tr><td><span class="badge warn">' + p.score.toFixed(2) + '</span>' +
-        (p.schemaGuard ? '<br><span class="badge warn" title="referenced as a property/type by other entities">schema</span>' : '') +
-        '</td><td>' + entLink(j.spaceId, p.a) + ' &harr; ' + entLink(j.spaceId, p.b) + '</td></tr>';
+      html += '<tr><td><span class="pill amber">' + p.score.toFixed(2) + '</span>' +
+        (p.schemaGuard ? ' <span class="pill" title="referenced as a property/type by other entities">schema</span>' : '') +
+        '</td><td>' + entLink(j.spaceId, p.a) + ' <span class="dim">·</span> ' + entLink(j.spaceId, p.b) + '</td></tr>';
     }
     html += '</table>';
   } else { html += '<p class="dim">none</p>'; }
@@ -172,7 +234,7 @@ async function scan(id) {
       const r = await fetch('/api/scan/' + encodeURIComponent(id));
       const j = await r.json();
       if (r.status === 202) {
-        out.innerHTML = '<span class="dim">scan queued — large spaces take a minute or two; this page polls automatically…</span>';
+        out.innerHTML = '<span class="dim">Scan queued — large spaces take a minute or two. This page polls automatically.</span>';
         await new Promise(ok => setTimeout(ok, 20000));
         continue;
       }
@@ -180,9 +242,9 @@ async function scan(id) {
       render(j);
       return;
     }
-    out.innerHTML = '<span class="badge warn">still running</span> <span class="dim">come back in a few minutes and press Scan again.</span>';
+    out.innerHTML = '<span class="pill amber">still running</span> <span class="dim">come back in a few minutes and press Scan again.</span>';
   } catch (e) {
-    out.innerHTML = '<span class="badge warn">error</span> ' + esc(e.message);
+    out.innerHTML = '<span class="pill amber">error</span> <span class="dim">' + esc(e.message) + '</span>';
   } finally { btn.disabled = false; }
 }
 
