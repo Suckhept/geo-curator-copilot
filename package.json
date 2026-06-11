@@ -1,0 +1,19 @@
+{
+  "name": "geo-curator-copilot",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Dedup engine, CLI and MCP server for curating Geo (geobrowser.io) knowledge graph spaces",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "packageManager": "pnpm@11.5.3",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

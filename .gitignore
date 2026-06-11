@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+ops.json
+geo-copilot-out/
+snapshot.json
+*.log

@@ -1,0 +1,17 @@
+{
+  "name": "@geo-copilot/mcp-server",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": { "geo-copilot-mcp": "./dist/main.js" },
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@geo-copilot/client": "workspace:*",
+    "@geo-copilot/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.24.0"
+  }
+}
