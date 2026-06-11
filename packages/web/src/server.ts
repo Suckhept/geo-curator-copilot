@@ -27,8 +27,8 @@ const PORT = Number(process.env['PORT'] ?? 8080);
 const STATIC_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'static');
 /** Nightly CLI full scans land here (see /root/precompute-scans.sh). */
 const PRECOMPUTED_DIR = process.env['GEOCHECK_DATA'] ?? '/var/lib/geocheck';
-/** Live-scan cap: 30 pages x 100 = 3000 entities keeps demo latency sane. */
-const SCAN_MAX_PAGES = 30;
+/** Live scans paginate the whole space; 500 pages x 100 = 50k sanity cap. */
+const SCAN_MAX_PAGES = 500;
 const SCAN_CACHE_TTL_MS = 10 * 60 * 1000;
 const RETRY_AFTER_SEC = 90;
 
@@ -43,6 +43,7 @@ interface ScanPayload {
   stats: DuplicateReport['stats'];
   autoClusters: unknown[];
   reviewPairs: unknown[];
+  intraEntity: unknown[];
 }
 
 const scanCache = new Map<string, { at: number; body: string }>();
@@ -68,7 +69,16 @@ function reportToPayload(
     score: p.score,
     schemaGuard: p.signals.some(s => s.kind === 'schema.entity'),
   }));
-  return { ...opts, stats: report.stats, autoClusters, reviewPairs };
+  // old precomputed files predate the intra-entity lint
+  const intraEntity = (report.intraEntity ?? []).slice(0, 200).map(i => ({
+    entityId: i.entityId,
+    entityName: i.entityName,
+    kind: i.kind,
+    key: i.key,
+    count: i.count,
+    planOps: i.planOps,
+  }));
+  return { ...opts, stats: report.stats, autoClusters, reviewPairs, intraEntity };
 }
 
 async function readPrecomputed(spaceId: string): Promise<string | undefined> {

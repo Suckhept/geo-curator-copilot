@@ -113,7 +113,7 @@
 <div class="label">Scan a space</div>
 <div class="card">
   <p class="dim" style="margin-top:0">Pick a flagship space — full nightly scan, served instantly — or paste any Geo space id.
-  Live scans are capped at 3,000 entities and queued.</p>
+  Live scans paginate the entire space (sanity cap 50,000 entities) and are queued.</p>
   <div class="row" style="margin-bottom:14px">
     <button class="preset" data-space="5908c73ad336472ccbd983491d2d17e4">Crypto datasets</button>
     <button class="preset" data-space="c9f267dcb0d270718c2a3c45a64afd32">Crypto</button>
@@ -130,7 +130,7 @@
 <div class="card">
   <ol>
     <li><b>Snapshot</b> — cursor-paginated GraphQL pull of the space (both Geo API dialects).</li>
-    <li><b>Score</b> — two-tier URL identity (report URLs vs profile links), name normalization, relation-shape conflicts; transitive clustering only over ≥0.9 edges.</li>
+    <li><b>Score</b> — two-tier URL identity (report URLs vs profile links), case- and punctuation-insensitive name matching, relation-shape conflicts; transitive clustering only over ≥0.9 edges.</li>
     <li><b>Guard</b> — schema entities (types and property definitions) and governance proposals are never auto-merged, only flagged for review.</li>
     <li><b>Publish</b> — GRC2 binary edit → IPFS → SpaceRegistry proposal from your Geo account; editors vote, the merge applies.</li>
   </ol>
@@ -187,7 +187,7 @@ function render(j) {
   const auto = j.autoClusters || [];
   let html = '<div class="row">' +
     '<span class="pill">' + j.scannedEntities.toLocaleString('en') + ' entities</span>' +
-    (j.truncated ? '<span class="pill amber">capped at 3,000</span>' : '') +
+    (j.truncated ? '<span class="pill amber">capped at 50,000</span>' : '') +
     (j.precomputed ? '<span class="pill green">full nightly scan</span>' : '<span class="pill">live scan</span>') +
     '<span class="dim" style="font-size:13px">' + esc(j.generatedAt) + '</span></div>';
 
@@ -218,8 +218,25 @@ function render(j) {
     html += '</table>';
   } else { html += '<p class="dim">none</p>'; }
 
+  const intra = j.intraEntity || [];
+  html += '<h3>Duplicate relations within entities <span class="pill">' + intra.length + ' findings</span></h3>';
+  if (intra.length) {
+    html += '<table><tr><th></th><th>entity</th><th>duplicated</th><th style="width:60px">copies</th></tr>';
+    intra.slice(0, 50).forEach((it, i) => {
+      const fixable = it.kind === 'relation' && it.planOps.length > 0;
+      html += '<tr><td style="width:28px">' +
+        (fixable ? '<input type="checkbox" class="pick-intra" data-i="' + i + '" checked>' : '') +
+        '</td><td>' + entLink(j.spaceId, { id: it.entityId, name: it.entityName }) + '</td>' +
+        '<td><span class="pill' + (fixable ? ' green' : '') + '">' + esc(it.kind) + '</span> <span class="mono dim">' + esc(it.key.length > 80 ? it.key.slice(0, 80) + '…' : it.key) + '</span>' +
+        (fixable ? '' : ' <span class="dim" style="font-size:12px">advisory</span>') +
+        '</td><td>x' + it.count + '</td></tr>';
+    });
+    html += '</table>';
+  } else { html += '<p class="dim">none</p>'; }
+
   out.innerHTML = html;
-  document.getElementById('export').style.display = auto.length ? 'inline-block' : 'none';
+  const fixableIntra = intra.some(it => it.planOps.length > 0);
+  document.getElementById('export').style.display = (auto.length || fixableIntra) ? 'inline-block' : 'none';
 }
 
 async function scan(id) {
@@ -262,13 +279,15 @@ document.getElementById('export').addEventListener('click', () => {
   if (!lastScan) return;
   const picked = [...document.querySelectorAll('.pick:checked')].map(cb => Number(cb.dataset.i));
   const clusters = picked.map(i => lastScan.autoClusters[i]).filter(Boolean);
-  const planOps = clusters.flatMap(c => c.planOps);
+  const pickedIntra = [...document.querySelectorAll('.pick-intra:checked')].map(cb => Number(cb.dataset.i));
+  const intraOps = pickedIntra.map(i => (lastScan.intraEntity || [])[i]).filter(Boolean).flatMap(it => it.planOps);
+  const planOps = clusters.flatMap(c => c.planOps).concat(intraOps);
   const plan = {
     exportedFrom: 'https://geocheck.space',
     generatedAt: lastScan.generatedAt,
     spaces: {
       [lastScan.spaceId]: {
-        label: 'geocheck export (' + clusters.length + ' clusters)',
+        label: 'geocheck export (' + clusters.length + ' clusters, ' + intraOps.length + ' intra-entity fixes)',
         tierA: { clusters: clusters.length, opCount: planOps.length, planOps: planOps },
         tierB: { clusters: 0, opCount: 0, planOps: [] }
       }
