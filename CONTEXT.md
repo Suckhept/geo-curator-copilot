@@ -112,18 +112,21 @@ network (SDK по умолчанию всегда бьёт в mainnet-RPC — э
 вшить `excludedTypeIds` с этим типом прямо в core-движок, чтобы такие
 сущности вообще не попадали в кластеры (добавлено в хвосты).
 
-## СТАТУС ПИЛОТА №1 (2026-06-11, вечер): готовится v2 c исключениями
+## СТАТУС ПИЛОТА №1 (2026-06-11): v2 ОПУБЛИКОВАН, ждёт голоса editors
 
-- Proposal v1 `7d117259183042198e036e6ad6fe974c` (tx 0xef1361bb…, блок
-  147082, кодек 0.4.1) — НЕ ПРИНИМАТЬ: в нём 2 deleteEntity на
-  governance-сущности (`2b6ca077…`, `b95b9012…`). Пусть истечёт сам
-  (~2026-06-12 09:50 UTC). За него и за самый первый
-  `7e66ee0bdd214c709bf508492ee49319` (битая кодировка 0.33) не голосовать.
-- v2 подготовлен и проверен dry-run-ом: «Dedup pilot v2: merge 56 duplicate
-  entities», 59 ops (57 deleteEntity + 1 deleteRelation + 1 createRelation),
-  --exclude применён, round-trip decode 0.4.1 подтвердил отсутствие
-  защищённых id. Публикация — после явного «да» пользователя; после неё
-  переключить /root/watch-proposal.sh на новый proposalId.
+- ДЕЙСТВУЮЩИЙ proposal `c8acd570ca364c7d81e2c1aede02d154` («Dedup pilot v2:
+  merge 56 duplicate entities»): tx
+  `0x19f7c8e83da998ae057413b86b0e4451a5d1bf136b66cf6cb053d17450243df2`,
+  блок 147087, SUCCESS. cid
+  `ipfs://bafkreic2gx4l3komynnwxa4grj632joeo2rarm5c22lneulfj2qp7ojo6m`,
+  editId `daca18c7db794745a47b7b4435d47519`. 59 ops (57 deleteEntity +
+  1 deleteRelation + 1 createRelation), --exclude применён, round-trip
+  decode 0.4.1 ок, индексер показывает имя. Кворум 1 голос editor,
+  окно 24 ч (~до 2026-06-12 11:45 UTC).
+  Мониторинг: /root/watch-proposal.sh (cron, лог /root/proposal-status.log).
+- МЁРТВЫЕ proposals, не голосовать, истекут сами 2026-06-12 утром:
+  `7e66ee0bdd214c709bf508492ee49319` (битая кодировка 0.33) и
+  `7d117259183042198e036e6ad6fe974c` (удалял 2 governance-сущности).
 - Пилот №2 (Crypto, tier all) — только после принятия v2 и явного «да»;
   обязательно с `--exclude` (3 известных governance-id в Crypto).
 
