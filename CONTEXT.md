@@ -103,6 +103,21 @@ network (SDK по умолчанию всегда бьёт в mainnet-RPC — э
    governance-сущности не попадали в кластеры ещё на скане — см. правило
    ниже; пока закрыто фильтром CLI `fix --exclude`.
 
+## ДЕПЛОЙ: https://geocheck.space (2026-06-11)
+
+- `packages/web` — публичная демо-витрина (шаг 3 стратегии «Упаковка»):
+  лендинг EN с цифрами пилота, live-статус proposal (прокси
+  `/api/proposal/{id}`), живой скан спейса `/api/scan/{spaceId}`
+  (cap 3000 сущностей, кэш 10 мин, ~1.5 мин на полный datasets-скан).
+- Хостинг: этот VPS (31.77.199.12). Node-сервер на 127.0.0.1:8080 (и
+  публично 31.77.199.12:8080 как превью), держится кроном
+  `/root/run-geocheck.sh` (@reboot + контроль каждые 5 мин,
+  лог /var/log/geocheck.log). nginx проксирует 443→8080
+  (/etc/nginx/sites-available/geocheck), TLS Let's Encrypt для
+  geocheck.space + www (авто-продление certbot.timer/cron).
+- В лендинге вшит PROPOSAL_ID действующего пилота — при следующих пилотах
+  обновлять константу в packages/web/static/index.html.
+
 ## ПРАВИЛО ДЕДУПА: сущности governance-предложений не трогать
 
 Тип Proposal `490a7c90ad4b4029b2b4d85d22fe203a` ВСЕГДА исключён из дедупа:

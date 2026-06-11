@@ -1,0 +1,15 @@
+{
+  "name": "@geo-copilot/web",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@geo-copilot/client": "workspace:*",
+    "@geo-copilot/core": "workspace:*"
+  }
+}
