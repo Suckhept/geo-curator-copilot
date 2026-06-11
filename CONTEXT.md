@@ -117,6 +117,21 @@ network (SDK по умолчанию всегда бьёт в mainnet-RPC — э
   geocheck.space + www (авто-продление certbot.timer/cron).
 - В лендинге вшит PROPOSAL_ID действующего пилота — при следующих пилотах
   обновлять константу в packages/web/static/index.html.
+- UI (итерация 2026-06-11): вывод разделён на «Duplicates (auto-merge,
+  ≥0.9)» и «Needs review (<0.9)»; каждая сущность — ссылка на
+  geobrowser.io/space/{spaceId}/{entityId}; чекбоксы на кластерах +
+  «Export plan» (формат pilot-edit.json, tierA = выбранные кластеры,
+  совместимость с `fix --plan --tier a` проверена).
+- `/api/scan` асинхронный: 202 {retryAfterSec} пока считается (фронт
+  поллит), кэш 10 мин. Ночной предрасчёт полных сканов Crypto +
+  Crypto datasets: cron 03:15 UTC `/root/precompute-scans.sh` →
+  /var/lib/geocheck/{spaceId}/report.json, сервер отдаёт мгновенно
+  с timestamp (лог /var/log/geocheck-precompute.log).
+- В core добавлен schema-гард (см. правило ниже — частично закрывает
+  «вшить excludedTypeIds»): сигнал `schema.entity`, сущности-определения
+  (упомянуты как propertyId/typeId/relation typeId у других) никогда не
+  попадают в auto-merge, только в review. На живом datasets-скане это
+  демотировало 13 пар. Тестов теперь 36.
 
 ## ПРАВИЛО ДЕДУПА: сущности governance-предложений не трогать
 
