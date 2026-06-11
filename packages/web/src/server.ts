@@ -14,7 +14,13 @@ import { createServer, type ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildReport, defaultConfig, type DuplicateReport } from '@geo-copilot/core';
+import {
+  DEFAULT_IDENTITY_URL_PROPERTIES,
+  DEFAULT_PROFILE_URL_PROPERTIES,
+  buildReport,
+  defaultConfig,
+  type DuplicateReport,
+} from '@geo-copilot/core';
 import { GEOBROWSER_API_ORIGIN, HttpTransport, fetchSnapshot, snapshotToEntities } from '@geo-copilot/client';
 
 const PORT = Number(process.env['PORT'] ?? 8080);
@@ -87,7 +93,13 @@ async function liveScan(spaceId: string): Promise<void> {
   const transport = new HttpTransport(GEOBROWSER_API_ORIGIN);
   const snapshot = await fetchSnapshot(transport, spaceId, { pageSize: 100, maxPages: SCAN_MAX_PAGES });
   const targets = snapshotToEntities(snapshot);
-  const { report } = buildReport({ space: spaceId, mode: 'scan', targets, config: defaultConfig({}) });
+  // Same config the CLI uses for the nightly full scans — live and
+  // precomputed results must agree on cluster counts.
+  const config = defaultConfig({
+    uniqueUrlPropertyIds: DEFAULT_IDENTITY_URL_PROPERTIES,
+    profileUrlPropertyIds: DEFAULT_PROFILE_URL_PROPERTIES,
+  });
+  const { report } = buildReport({ space: spaceId, mode: 'scan', targets, config });
   const payload = reportToPayload(report, {
     spaceId,
     scannedEntities: targets.length,
