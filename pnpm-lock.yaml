@@ -36,11 +36,17 @@ importers:
         specifier: workspace:*
         version: link:../core
       '@geoprotocol/grc-20':
-        specifier: ^0.1.7
-        version: 0.1.7
+        specifier: ^0.4.1
+        version: 0.4.1
       '@graphprotocol/grc-20':
         specifier: ^0.33.0
         version: 0.33.0(typescript@5.9.3)(zod@3.25.76)
+      permissionless:
+        specifier: ^0.2.35
+        version: 0.2.57(viem@2.52.2(typescript@5.9.3)(zod@3.25.76))
+      viem:
+        specifier: ^2.37.6
+        version: 2.52.2(typescript@5.9.3)(zod@3.25.76)
 
   packages/core: {}
 
@@ -225,6 +231,10 @@ packages:
 
   '@geoprotocol/grc-20@0.1.7':
     resolution: {integrity: sha512-BJGUwG6exJnLkoRzCwzohybxgtwsYwuzEcnyJ2YPQQ1WwDXp7o8oNwLVUjzwEqjEabw1oIRpSnDNrH/LqSEaYA==}
+    engines: {node: '>=18'}
+
+  '@geoprotocol/grc-20@0.4.1':
+    resolution: {integrity: sha512-J5trJZBydDOO5GsEMzy9ukX9GetblBMLnn4ugpTFOcwS4akA54Lxg/uYJbXUDh5EVPir3PAzC6UN6EiBz0K/Ww==}
     engines: {node: '>=18'}
 
   '@graphprotocol/grc-20@0.33.0':
@@ -1186,6 +1196,10 @@ snapshots:
     optional: true
 
   '@geoprotocol/grc-20@0.1.7':
+    dependencies:
+      '@bokuweb/zstd-wasm': 0.0.27
+
+  '@geoprotocol/grc-20@0.4.1':
     dependencies:
       '@bokuweb/zstd-wasm': 0.0.27
 

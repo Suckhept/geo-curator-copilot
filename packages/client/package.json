@@ -20,6 +20,8 @@
   "dependencies": {
     "@geo-copilot/core": "workspace:*",
     "@graphprotocol/grc-20": "^0.33.0",
-    "@geoprotocol/grc-20": "^0.1.7"
+    "@geoprotocol/grc-20": "^0.4.1",
+    "permissionless": "^0.2.35",
+    "viem": "^2.37.6"
   }
 }
