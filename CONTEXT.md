@@ -131,7 +131,17 @@ network (SDK по умолчанию всегда бьёт в mainnet-RPC — э
   «вшить excludedTypeIds»): сигнал `schema.entity`, сущности-определения
   (упомянуты как propertyId/typeId/relation typeId у других) никогда не
   попадают в auto-merge, только в review. На живом datasets-скане это
-  демотировало 13 пар. Тестов теперь 36.
+  демотировало 13 пар.
+- Итерация по фидбеку куратора Geo (2026-06-11, вечер): (1) intra-entity
+  lint в core — дубли relations с одной (typeId, toEntityId) у одной
+  сущности → PlanOp `deleteRelation` на копии после первой; дубли values
+  (propertyId, value) — advisory (у values в снапшоте нет id). Секция
+  intraEntity в отчёте/markdown, на сайте таблица «Duplicate relations
+  within entities» с чекбоксами, fixable-копии попадают в Export plan.
+  (2) Live-сканы пагинируют весь спейс (sanity-кап 50k, было 3k).
+  (3) Редизайн geocheck.space под родную тёмную тему geobrowser
+  (#0e0e0e/#161616/#262626, Inter, outline-пилюли, один зелёный акцент).
+  Тестов 38.
 
 ## ПРАВИЛО ДЕДУПА: сущности governance-предложений не трогать
 
