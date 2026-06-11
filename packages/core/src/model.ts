@@ -56,7 +56,8 @@ export interface MatchSignal {
     | 'name.fuzzy' // token-sort / token-set similarity
     | 'shape.relations' // overlapping (typeId -> toEntityId) relation pairs
     | 'relation.conflict' // same relation type points at disjoint targets -> negative evidence
-    | 'version.veto'; // version tokens disagree -> negative evidence
+    | 'version.veto' // version tokens disagree -> negative evidence
+    | 'schema.entity'; // entity is used as a property/type elsewhere -> never auto-merge
   score: number;
   detail: string;
 }

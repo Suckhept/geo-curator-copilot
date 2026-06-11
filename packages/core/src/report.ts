@@ -57,6 +57,23 @@ function opsForDuplicate(
   return ops;
 }
 
+/**
+ * Schema entities — ids that other entities reference as a value property,
+ * relation type, or entity type. Property/type definitions legitimately share
+ * names ("Date", "Source", …), and deleting one silently breaks every entity
+ * that uses it, so they are never auto-merged: any cluster pair touching a
+ * schema entity is demoted to review with a `schema.entity` signal.
+ */
+export function collectSchemaIds(targets: readonly NormalizedEntity[]): Set<string> {
+  const ids = new Set<string>();
+  for (const t of targets) {
+    for (const typeId of t.typeIds) ids.add(typeId);
+    for (const v of t.values) ids.add(v.propertyId);
+    for (const r of t.relations) ids.add(r.typeId);
+  }
+  return ids;
+}
+
 export interface BuildReportParams {
   space: string;
   mode: 'pre-publish' | 'scan';
@@ -71,8 +88,10 @@ export function buildReport(params: BuildReportParams): { report: DuplicateRepor
   const generateFixOps = params.generateFixOps ?? true;
   const matchResult = match(targets, config, drafts);
   const inbound = buildInboundIndex(targets);
+  const schemaIds = collectSchemaIds(targets);
 
   const clusters: DuplicateCluster[] = [];
+  const schemaReviewPairs: ReviewPair[] = [];
   let dupCount = 0;
 
   const inCluster = new Set<string>();
@@ -80,6 +99,7 @@ export function buildReport(params: BuildReportParams): { report: DuplicateRepor
     const { canonical, reason } = pickCanonical(cluster);
     const members: DuplicateClusterMember[] = [];
     const suggestedOps: PlanOp[] = [];
+    const canonicalIsSchema = schemaIds.has(canonical.id);
 
     for (const member of cluster) {
       inCluster.add(member.id);
@@ -92,6 +112,26 @@ export function buildReport(params: BuildReportParams): { report: DuplicateRepor
           .filter(p => p.a.id === member.id || p.b.id === member.id)
           .sort((x, y) => y.score - x.score)[0];
       const score = bestPair?.score ?? 0;
+
+      // Schema guard: pairs touching property/type definitions are demoted to
+      // review — same names are by design there, deletion breaks consumers.
+      if (canonicalIsSchema || schemaIds.has(member.id)) {
+        const which = [
+          ...(schemaIds.has(member.id) ? [member.id] : []),
+          ...(canonicalIsSchema ? [canonical.id] : []),
+        ].join(', ');
+        schemaReviewPairs.push({
+          a: { id: member.id, name: member.name, isDraft: member.isDraft, source: member.source },
+          b: { id: canonical.id, name: canonical.name, isDraft: canonical.isDraft },
+          score: Number(score.toFixed(3)),
+          verdict: 'likely',
+          signals: [
+            ...(bestPair?.signals ?? []),
+            { kind: 'schema.entity', score: 0, detail: `used as property/type by other entities: ${which}` },
+          ],
+        });
+        continue;
+      }
       dupCount++;
 
       members.push({
@@ -109,6 +149,7 @@ export function buildReport(params: BuildReportParams): { report: DuplicateRepor
       }
     }
 
+    if (members.length === 0) continue;
     clusters.push({
       canonical: { id: canonical.id, name: canonical.name, isDraft: canonical.isDraft, reason },
       duplicates: members.sort((a, b) => b.score - a.score),
@@ -121,17 +162,20 @@ export function buildReport(params: BuildReportParams): { report: DuplicateRepor
   // likely pairs (outside the auto-merge band) for human review; weak pairs
   // are counted but not listed — on real data they are noise
   const weakCount = matchResult.pairs.filter(p => p.verdict === 'weak').length;
-  const reviewPairs: ReviewPair[] = matchResult.pairs
-    .filter(p => p.verdict === 'likely')
+  const reviewPairs: ReviewPair[] = [
+    ...schemaReviewPairs,
+    ...matchResult.pairs
+      .filter(p => p.verdict === 'likely')
+      .map(p => ({
+        a: { id: p.a.id, name: p.a.name, isDraft: p.a.isDraft, source: p.a.source },
+        b: { id: p.b.id, name: p.b.name, isDraft: p.b.isDraft, source: p.b.source },
+        score: Number(p.score.toFixed(3)),
+        verdict: p.verdict,
+        signals: p.signals,
+      })),
+  ]
     .sort((x, y) => y.score - x.score)
-    .slice(0, 300)
-    .map(p => ({
-      a: { id: p.a.id, name: p.a.name, isDraft: p.a.isDraft, source: p.a.source },
-      b: { id: p.b.id, name: p.b.name, isDraft: p.b.isDraft, source: p.b.source },
-      score: Number(p.score.toFixed(3)),
-      verdict: p.verdict,
-      signals: p.signals,
-    }));
+    .slice(0, 300);
   const likelyCount = reviewPairs.length;
 
   const checked = (drafts?.length ?? 0) + (drafts ? 0 : targets.length);

@@ -3,7 +3,7 @@ export * from './system-ids.js';
 export * from './normalize.js';
 export { extractFeatures, scorePair, verdictFor } from './scoring.js';
 export { match, pickCanonical, resolveCanonical, type MatchResult, type MatchOptions } from './matcher.js';
-export { buildReport, buildInboundIndex, renderMarkdown, type BuildReportParams } from './report.js';
+export { buildReport, buildInboundIndex, collectSchemaIds, renderMarkdown, type BuildReportParams } from './report.js';
 export {
   normalizeName,
   tokenize,

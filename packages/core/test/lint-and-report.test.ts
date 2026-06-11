@@ -247,3 +247,53 @@ describe('identity URL vs relation conflict', () => {
     expect(p.signals.some(s => s.kind === 'relation.conflict')).toBe(true);
   });
 });
+
+describe('schema-entity guard', () => {
+  const mkSchemaTwin = (id: string, name: string) => ({
+    id,
+    isDraft: false,
+    name,
+    typeIds: [],
+    values: [{ propertyId: REPORT_URL_PROPERTY, text: 'https://example.com/schema/date-property' }],
+    relations: [],
+  });
+
+  it('never auto-merges an entity that other entities use as a type/property', () => {
+    // AUDIT_TYPE is referenced via typeIds by every audit in the fixture, so
+    // it is a schema entity; its same-name+same-url twin would otherwise be a
+    // guaranteed duplicate-tier cluster.
+    const targets = [
+      ...cryptoSpaceFixture(),
+      mkSchemaTwin(AUDIT_TYPE, 'Audit'),
+      mkSchemaTwin('a5550000000040008000000000000001', 'Audit'),
+    ];
+    const { report } = buildReport({ space: 'test', mode: 'scan', targets, config });
+
+    const inClusters = report.clusters.some(
+      c => c.canonical.id === AUDIT_TYPE || c.duplicates.some(d => d.id === AUDIT_TYPE),
+    );
+    expect(inClusters).toBe(false);
+
+    const demoted = report.reviewPairs.find(
+      p => p.a.id === AUDIT_TYPE || p.b.id === AUDIT_TYPE,
+    );
+    expect(demoted).toBeDefined();
+    expect(demoted!.signals.some(s => s.kind === 'schema.entity')).toBe(true);
+    // no deleteEntity op may target the schema entity anywhere in the plan
+    const deleted = report.clusters.flatMap(c => c.suggestedOps).filter(o => o.kind === 'deleteEntity');
+    expect(deleted.some(o => 'id' in o && o.id === AUDIT_TYPE)).toBe(false);
+  });
+
+  it('identical twin pair WITHOUT schema references still clusters (control)', () => {
+    const targets = [
+      ...cryptoSpaceFixture(),
+      mkSchemaTwin('a6660000000040008000000000000001', 'Date thing'),
+      mkSchemaTwin('a6660000000040008000000000000002', 'Date thing'),
+    ];
+    const { report } = buildReport({ space: 'test', mode: 'scan', targets, config });
+    const cluster = report.clusters.find(
+      c => c.canonical.id.startsWith('a666') || c.duplicates.some(d => d.id.startsWith('a666')),
+    );
+    expect(cluster).toBeDefined();
+  });
+});
