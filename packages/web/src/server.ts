@@ -5,56 +5,97 @@
  *   GET /                      landing page (static/index.html)
  *   GET /healthz               liveness
  *   GET /api/proposal/:id      proxy to testnet-api proposal status (CORS-free)
- *   GET /api/scan/:spaceId     live duplicate scan of a Geo space (capped, cached)
+ *   GET /api/scan/:spaceId     duplicate scan of a Geo space:
+ *                              precomputed nightly report when available,
+ *                              otherwise a capped live scan with an async
+ *                              queue (202 + retryAfterSec while running).
  */
 import { createServer, type ServerResponse } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildReport, defaultConfig } from '@geo-copilot/core';
+import { buildReport, defaultConfig, type DuplicateReport } from '@geo-copilot/core';
 import { GEOBROWSER_API_ORIGIN, HttpTransport, fetchSnapshot, snapshotToEntities } from '@geo-copilot/client';
 
 const PORT = Number(process.env['PORT'] ?? 8080);
 const STATIC_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'static');
+/** Nightly CLI full scans land here (see /root/precompute-scans.sh). */
+const PRECOMPUTED_DIR = process.env['GEOCHECK_DATA'] ?? '/var/lib/geocheck';
 /** Live-scan cap: 30 pages x 100 = 3000 entities keeps demo latency sane. */
 const SCAN_MAX_PAGES = 30;
 const SCAN_CACHE_TTL_MS = 10 * 60 * 1000;
+const RETRY_AFTER_SEC = 90;
 
 const HEX32 = /^[0-9a-f]{32}$/;
 
-interface CacheEntry {
-  at: number;
-  body: string;
+interface ScanPayload {
+  spaceId: string;
+  scannedEntities: number;
+  truncated: boolean;
+  precomputed: boolean;
+  generatedAt: string;
+  stats: DuplicateReport['stats'];
+  autoClusters: unknown[];
+  reviewPairs: unknown[];
 }
-const scanCache = new Map<string, CacheEntry>();
-const inflight = new Map<string, Promise<string>>();
+
+const scanCache = new Map<string, { at: number; body: string }>();
+const inflight = new Map<string, Promise<void>>();
 
 function send(res: ServerResponse, status: number, body: string, type = 'application/json'): void {
   res.writeHead(status, { 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': 'no-store' });
   res.end(body);
 }
 
-async function scanSpace(spaceId: string): Promise<string> {
+function reportToPayload(
+  report: DuplicateReport,
+  opts: { spaceId: string; scannedEntities: number; truncated: boolean; precomputed: boolean; generatedAt: string },
+): ScanPayload {
+  const autoClusters = report.clusters.map(c => ({
+    canonical: { id: c.canonical.id, name: c.canonical.name },
+    duplicates: c.duplicates.map(d => ({ id: d.id, name: d.name, score: d.score })),
+    planOps: c.suggestedOps,
+  }));
+  const reviewPairs = report.reviewPairs.slice(0, 100).map(p => ({
+    a: { id: p.a.id, name: p.a.name },
+    b: { id: p.b.id, name: p.b.name },
+    score: p.score,
+    schemaGuard: p.signals.some(s => s.kind === 'schema.entity'),
+  }));
+  return { ...opts, stats: report.stats, autoClusters, reviewPairs };
+}
+
+async function readPrecomputed(spaceId: string): Promise<string | undefined> {
+  const file = join(PRECOMPUTED_DIR, spaceId, 'report.json');
+  try {
+    const [raw] = await Promise.all([readFile(file, 'utf8'), stat(file)]);
+    const report = JSON.parse(raw) as DuplicateReport;
+    const payload = reportToPayload(report, {
+      spaceId,
+      scannedEntities: report.stats.checked,
+      truncated: false,
+      precomputed: true,
+      generatedAt: report.generatedAt,
+    });
+    return JSON.stringify(payload);
+  } catch {
+    return undefined;
+  }
+}
+
+async function liveScan(spaceId: string): Promise<void> {
   const transport = new HttpTransport(GEOBROWSER_API_ORIGIN);
   const snapshot = await fetchSnapshot(transport, spaceId, { pageSize: 100, maxPages: SCAN_MAX_PAGES });
   const targets = snapshotToEntities(snapshot);
   const { report } = buildReport({ space: spaceId, mode: 'scan', targets, config: defaultConfig({}) });
-  const clusters = report.clusters
-    .slice()
-    .sort((a, b) => b.duplicates.length - a.duplicates.length)
-    .slice(0, 25)
-    .map(c => ({
-      canonical: { id: c.canonical.id, name: c.canonical.name },
-      duplicates: c.duplicates.map(d => ({ id: d.id, name: d.name, score: d.score, verdict: d.verdict })),
-    }));
-  return JSON.stringify({
+  const payload = reportToPayload(report, {
     spaceId,
     scannedEntities: targets.length,
     truncated: targets.length >= SCAN_MAX_PAGES * 100,
-    stats: report.stats,
-    topClusters: clusters,
+    precomputed: false,
     generatedAt: new Date().toISOString(),
   });
+  scanCache.set(spaceId, { at: Date.now(), body: JSON.stringify(payload) });
 }
 
 const server = createServer((req, res) => {
@@ -82,16 +123,23 @@ const server = createServer((req, res) => {
     if (scan) {
       const spaceId = scan[1]!.replace(/-/g, '');
       if (!HEX32.test(spaceId)) return send(res, 400, '{"error":"space id must be a 16-byte hex uuid"}');
+
+      const precomputed = await readPrecomputed(spaceId);
+      if (precomputed) return send(res, 200, precomputed);
+
       const cached = scanCache.get(spaceId);
       if (cached && Date.now() - cached.at < SCAN_CACHE_TTL_MS) return send(res, 200, cached.body);
-      let job = inflight.get(spaceId);
-      if (!job) {
-        job = scanSpace(spaceId).finally(() => inflight.delete(spaceId));
+
+      if (!inflight.has(spaceId)) {
+        const job = liveScan(spaceId)
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            scanCache.set(spaceId, { at: Date.now(), body: JSON.stringify({ error: message }) });
+          })
+          .finally(() => inflight.delete(spaceId));
         inflight.set(spaceId, job);
       }
-      const body = await job;
-      scanCache.set(spaceId, { at: Date.now(), body });
-      return send(res, 200, body);
+      return send(res, 202, JSON.stringify({ status: 'pending', retryAfterSec: RETRY_AFTER_SEC }));
     }
 
     return send(res, 404, '{"error":"not found"}');

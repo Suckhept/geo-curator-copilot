@@ -60,11 +60,16 @@
   <div id="proposal" class="dim" style="margin-top:8px">loading status…</div>
 </div>
 
-<h2>Try it — scan a space live</h2>
+<h2>Try it — scan a space</h2>
 <div class="card">
-  <p class="dim" style="margin-top:0">Paste a Geo space id (32-hex). The demo scans up to 3,000 entities and shows the largest duplicate clusters. Results are cached for 10 minutes.</p>
+  <p class="dim" style="margin-top:0">Pick a flagship space (full nightly scan, instant) or paste any Geo space id (32-hex; live scan capped at 3,000 entities, queued — check back in a minute or two).</p>
+  <p style="margin:6px 0 10px">
+    <button class="preset" data-space="5908c73ad336472ccbd983491d2d17e4">Crypto datasets</button>
+    <button class="preset" data-space="c9f267dcb0d270718c2a3c45a64afd32">Crypto</button>
+  </p>
   <input type="text" id="space" value="5908c73ad336472ccbd983491d2d17e4" spellcheck="false">
   <button id="go">Scan space</button>
+  <button id="export" style="display:none;background:#26334d">Export plan (.json)</button>
   <div id="scan-result" class="card" style="margin-top:16px"></div>
 </div>
 
@@ -108,33 +113,111 @@ async function loadProposal() {
 }
 loadProposal();
 
-document.getElementById('go').addEventListener('click', async () => {
+let lastScan = null;
+const MAX_RENDERED_CLUSTERS = 50;
+
+function entLink(spaceId, e) {
+  return '<a href="https://www.geobrowser.io/space/' + spaceId + '/' + esc(e.id) + '" target="_blank" rel="noopener">' + esc(e.name || e.id) + '</a>';
+}
+
+function render(j) {
+  lastScan = j;
+  const out = document.getElementById('scan-result');
+  const auto = j.autoClusters || [];
+  let html = '<b>' + j.scannedEntities + '</b> entities scanned' +
+    (j.truncated ? ' <span class="badge warn">capped at 3000</span>' : '') +
+    (j.precomputed ? ' <span class="badge ok">full nightly scan</span> <span class="dim">' + esc(j.generatedAt) + '</span>'
+                   : ' <span class="dim">live, ' + esc(j.generatedAt) + '</span>');
+
+  html += '<h3 style="margin:18px 0 6px">Duplicates (auto-merge, &ge;0.9) — ' + auto.length + ' clusters</h3>';
+  if (auto.length) {
+    html += '<table><tr><th></th><th>keep (canonical)</th><th>merge into it</th></tr>';
+    auto.slice(0, MAX_RENDERED_CLUSTERS).forEach((c, i) => {
+      html += '<tr><td><input type="checkbox" class="pick" data-i="' + i + '" checked></td>' +
+        '<td>' + entLink(j.spaceId, c.canonical) + '</td><td>' +
+        c.duplicates.map(d => '<span class="badge ok">' + d.score.toFixed(2) + '</span> ' + entLink(j.spaceId, d)).join('<br>') +
+        '</td></tr>';
+    });
+    html += '</table>';
+    if (auto.length > MAX_RENDERED_CLUSTERS) {
+      html += '<p class="dim">…showing first ' + MAX_RENDERED_CLUSTERS + ' of ' + auto.length + ' clusters; Export includes only checked (visible) ones.</p>';
+    }
+  } else { html += '<p class="dim">none</p>'; }
+
+  const review = j.reviewPairs || [];
+  html += '<h3 style="margin:18px 0 6px">Needs review (&lt;0.9) — ' + review.length + ' pairs</h3>';
+  if (review.length) {
+    html += '<table><tr><th>score</th><th>pair</th></tr>';
+    for (const p of review.slice(0, 50)) {
+      html += '<tr><td><span class="badge warn">' + p.score.toFixed(2) + '</span>' +
+        (p.schemaGuard ? '<br><span class="badge warn" title="referenced as a property/type by other entities">schema</span>' : '') +
+        '</td><td>' + entLink(j.spaceId, p.a) + ' &harr; ' + entLink(j.spaceId, p.b) + '</td></tr>';
+    }
+    html += '</table>';
+  } else { html += '<p class="dim">none</p>'; }
+
+  out.innerHTML = html;
+  document.getElementById('export').style.display = auto.length ? 'inline-block' : 'none';
+}
+
+async function scan(id) {
   const btn = document.getElementById('go');
   const out = document.getElementById('scan-result');
-  const id = document.getElementById('space').value.trim().replace(/-/g, '');
   out.style.display = 'block';
-  out.innerHTML = '<span class="dim">scanning… (large spaces take up to a minute)</span>';
+  document.getElementById('export').style.display = 'none';
+  out.innerHTML = '<span class="dim">scanning…</span>';
   btn.disabled = true;
   try {
-    const r = await fetch('/api/scan/' + encodeURIComponent(id));
-    const j = await r.json();
-    if (j.error) throw new Error(j.error);
-    let html = '<b>' + j.scannedEntities + '</b> entities scanned' + (j.truncated ? ' <span class="badge warn">capped</span>' : '') +
-      ' — clusters: <b>' + j.stats.clusters + '</b>, duplicates: <b>' + j.stats.duplicate + '</b>, likely: ' + j.stats.likely;
-    if (j.topClusters.length) {
-      html += '<table style="margin-top:12px"><tr><th>keep (canonical)</th><th>merge into it</th></tr>';
-      for (const c of j.topClusters) {
-        html += '<tr><td>' + esc(c.canonical.name || c.canonical.id) + '</td><td>' +
-          c.duplicates.map(d =>
-            '<span class="badge ' + (d.verdict === 'duplicate' ? 'ok' : 'warn') + '">' + d.score.toFixed(2) + '</span> ' + esc(d.name || d.id)
-          ).join('<br>') + '</td></tr>';
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const r = await fetch('/api/scan/' + encodeURIComponent(id));
+      const j = await r.json();
+      if (r.status === 202) {
+        out.innerHTML = '<span class="dim">scan queued — large spaces take a minute or two; this page polls automatically…</span>';
+        await new Promise(ok => setTimeout(ok, 20000));
+        continue;
       }
-      html += '</table>';
-    } else { html += '<p class="dim">No duplicate clusters found.</p>'; }
-    out.innerHTML = html;
+      if (j.error) throw new Error(j.error);
+      render(j);
+      return;
+    }
+    out.innerHTML = '<span class="badge warn">still running</span> <span class="dim">come back in a few minutes and press Scan again.</span>';
   } catch (e) {
     out.innerHTML = '<span class="badge warn">error</span> ' + esc(e.message);
   } finally { btn.disabled = false; }
+}
+
+document.getElementById('go').addEventListener('click', () => {
+  scan(document.getElementById('space').value.trim().replace(/-/g, ''));
+});
+for (const b of document.querySelectorAll('.preset')) {
+  b.addEventListener('click', () => {
+    document.getElementById('space').value = b.dataset.space;
+    scan(b.dataset.space);
+  });
+}
+
+document.getElementById('export').addEventListener('click', () => {
+  if (!lastScan) return;
+  const picked = [...document.querySelectorAll('.pick:checked')].map(cb => Number(cb.dataset.i));
+  const clusters = picked.map(i => lastScan.autoClusters[i]).filter(Boolean);
+  const planOps = clusters.flatMap(c => c.planOps);
+  const plan = {
+    exportedFrom: 'https://geocheck.space',
+    generatedAt: lastScan.generatedAt,
+    spaces: {
+      [lastScan.spaceId]: {
+        label: 'geocheck export (' + clusters.length + ' clusters)',
+        tierA: { clusters: clusters.length, opCount: planOps.length, planOps: planOps },
+        tierB: { clusters: 0, opCount: 0, planOps: [] }
+      }
+    }
+  };
+  const blob = new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'geocheck-plan-' + lastScan.spaceId.slice(0, 8) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
 });
 </script>
 </body>
