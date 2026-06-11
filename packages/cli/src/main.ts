@@ -205,6 +205,7 @@ program
     process.env['GEO_SAFE_ADDRESS'],
   )
   .option('--dry-run', 'upload to IPFS and build calldata but do not send the tx', false)
+  .option('--exclude <file>', 'JSON with entity ids that must never be deleted (drops their deleteEntity ops)')
   .action(async opts => {
     if (!opts.report && !opts.plan) throw new Error('Pass --report <report.json> or --plan <plan.json>');
     let planOps: PlanOp[];
@@ -217,6 +218,14 @@ program
     } else {
       const report = JSON.parse(await readFile(resolve(opts.report), 'utf8')) as DuplicateReport;
       planOps = report.clusters.flatMap(c => c.suggestedOps);
+    }
+    if (opts.exclude) {
+      const excluded = collectExcludedIds(JSON.parse(await readFile(resolve(opts.exclude), 'utf8')));
+      const before = planOps.length;
+      planOps = planOps.filter(
+        op => !(op.kind === 'deleteEntity' && excluded.has(op.id.replace(/-/g, '').toLowerCase())),
+      );
+      console.log(`--exclude: dropped ${before - planOps.length} deleteEntity op(s) (${excluded.size} protected ids)`);
     }
     const { ops, skipped } = serializePlanOps(planOps);
     await writeFile(
@@ -255,6 +264,26 @@ program
     });
     console.log(JSON.stringify(result, null, 2));
   });
+
+/**
+ * Gathers every 32-hex entity id found anywhere in the exclude file, so both
+ * a flat array and a {spaces: {spaceId: [ids]}} layout work.
+ */
+function collectExcludedIds(parsed: unknown): Set<string> {
+  const ids = new Set<string>();
+  const walk = (node: unknown): void => {
+    if (typeof node === 'string') {
+      const hex = node.replace(/-/g, '').toLowerCase();
+      if (/^[0-9a-f]{32}$/.test(hex)) ids.add(hex);
+    } else if (Array.isArray(node)) {
+      node.forEach(walk);
+    } else if (node !== null && typeof node === 'object') {
+      Object.values(node).forEach(walk);
+    }
+  };
+  walk(parsed);
+  return ids;
+}
 
 /** Accepts PlanOp[], {planOps}, or pilot-edit.json {spaces:{id:{tierA,tierB}}}. */
 function loadPlanOps(parsed: unknown, space: string | undefined, tier: string): PlanOp[] {
