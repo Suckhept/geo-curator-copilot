@@ -6,3 +6,4 @@ ops.json
 geo-copilot-out/
 snapshot.json
 *.log
+.claude/settings.local.json
