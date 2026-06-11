@@ -137,7 +137,13 @@ async function uploadEditBinary(binary: Uint8Array): Promise<string> {
   const { cid } = (await res.json()) as { cid: string };
   return cid.startsWith('ipfs://') ? cid : `ipfs://${cid}`;
 }
-/** Geo early-access gas sponsorship key, shipped publicly inside @graphprotocol/grc-20. */
+/**
+ * NOT A SECRET: this Pimlico API key is the gas-sponsorship key that the Geo
+ * team ships verbatim in the public @graphprotocol/grc-20 npm package
+ * (dist/src/smart-wallet.js, "fallback API key for the duration of the Geo
+ * Genesis early access period", rate-limited server-side). It is included
+ * here knowingly; rotate to your own key via Pimlico if it stops working.
+ */
 const PIMLICO_BUNDLER_19411 = 'https://api.pimlico.io/v2/19411/rpc?apikey=pim_KqHm63txxhbCYjdDaWaHqH';
 
 const GEO_TESTNET_CHAIN = {
