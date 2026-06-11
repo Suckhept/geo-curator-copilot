@@ -199,6 +199,11 @@ program
   .option('--edit-name <name>', 'edit name', 'geo-copilot dedup fix')
   .option('--network <net>', 'MAINNET | TESTNET | TESTNET_V2 | TESTNET_V3', 'MAINNET')
   .option('--rpc-url <url>', 'override chain RPC (defaults follow --network)')
+  .option(
+    '--safe-address <address>',
+    'already-deployed Geo Safe on chain 19411 to publish from (defaults to env GEO_SAFE_ADDRESS)',
+    process.env['GEO_SAFE_ADDRESS'],
+  )
   .option('--dry-run', 'upload to IPFS and build calldata but do not send the tx', false)
   .action(async opts => {
     if (!opts.report && !opts.plan) throw new Error('Pass --report <report.json> or --plan <plan.json>');
@@ -245,6 +250,7 @@ program
       privateKey: privateKey as `0x${string}`,
       network: opts.network,
       rpcUrl: opts.rpcUrl,
+      safeAddress: opts.safeAddress as `0x${string}` | undefined,
       dryRun: Boolean(opts.dryRun),
     });
     console.log(JSON.stringify(result, null, 2));
