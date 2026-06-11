@@ -3,6 +3,7 @@ import type {
   DuplicateCluster,
   DuplicateClusterMember,
   DuplicateReport,
+  IntraEntityIssue,
   NormalizedEntity,
   PlanOp,
   ReviewPair,
@@ -72,6 +73,51 @@ export function collectSchemaIds(targets: readonly NormalizedEntity[]): Set<stri
     for (const r of t.relations) ids.add(r.typeId);
   }
   return ids;
+}
+
+/**
+ * Curator lint: duplicate relations/values INSIDE one entity. Relations with
+ * the same (typeId, toEntityId) are real graph duplicates — every copy after
+ * the first gets a deleteRelation op. Values with the same (propertyId,
+ * value) are advisory only: snapshot values carry no ids to delete by.
+ */
+export function findIntraEntityDuplicates(targets: readonly NormalizedEntity[]): IntraEntityIssue[] {
+  const issues: IntraEntityIssue[] = [];
+  for (const e of targets) {
+    if (e.isDraft) continue;
+
+    const relGroups = new Map<string, NormalizedEntity['relations']>();
+    for (const r of e.relations) {
+      const k = `${r.typeId} -> ${r.toEntityId}`;
+      const list = relGroups.get(k);
+      if (list) list.push(r);
+      else relGroups.set(k, [r]);
+    }
+    for (const [key, group] of relGroups) {
+      if (group.length < 2) continue;
+      const [keep, ...extras] = group;
+      const planOps: PlanOp[] = extras
+        .filter(r => r.id !== undefined)
+        .map(r => ({
+          kind: 'deleteRelation' as const,
+          id: r.id!,
+          note: `duplicate relation ${key} on "${e.name}" (${e.id}) — keeping ${keep!.id ?? 'first copy'}`,
+        }));
+      issues.push({ entityId: e.id, entityName: e.name, kind: 'relation', key, count: group.length, planOps });
+    }
+
+    const valGroups = new Map<string, number>();
+    for (const v of e.values) {
+      const value = v.text ?? v.datetime ?? (v.boolean !== undefined ? String(v.boolean) : v.float !== undefined ? String(v.float) : '');
+      const k = `${v.propertyId} = ${value}`;
+      valGroups.set(k, (valGroups.get(k) ?? 0) + 1);
+    }
+    for (const [key, count] of valGroups) {
+      if (count < 2) continue;
+      issues.push({ entityId: e.id, entityName: e.name, kind: 'value', key, count, planOps: [] });
+    }
+  }
+  return issues;
 }
 
 export interface BuildReportParams {
@@ -179,6 +225,7 @@ export function buildReport(params: BuildReportParams): { report: DuplicateRepor
   const likelyCount = reviewPairs.length;
 
   const checked = (drafts?.length ?? 0) + (drafts ? 0 : targets.length);
+  const intraEntity = findIntraEntityDuplicates(targets);
   const report: DuplicateReport = {
     space,
     mode,
@@ -186,12 +233,15 @@ export function buildReport(params: BuildReportParams): { report: DuplicateRepor
     thresholds: config.thresholds,
     clusters,
     reviewPairs,
+    intraEntity,
     stats: {
       checked,
       clusters: clusters.length,
       duplicate: dupCount,
       likely: likelyCount,
       weak: weakCount,
+      intraRelationDuplicates: intraEntity.filter(i => i.kind === 'relation').length,
+      intraValueDuplicates: intraEntity.filter(i => i.kind === 'value').length,
     },
   };
   return { report, matchResult };
@@ -223,6 +273,16 @@ export function renderMarkdown(report: DuplicateReport): string {
     lines.push(`## Review pairs (${report.reviewPairs.length}) — not auto-merged`);
     for (const p of report.reviewPairs) {
       lines.push(`- [${p.verdict} ${p.score}] ${p.a.name} <> ${p.b.name} | ${p.signals.map(s => s.kind).join(',')}`);
+    }
+  }
+  if (report.intraEntity.length > 0) {
+    lines.push('');
+    lines.push(`## Duplicate relations within entities (${report.intraEntity.length})`);
+    for (const i of report.intraEntity) {
+      lines.push(
+        `- [${i.kind} x${i.count}] ${i.entityName} (${i.entityId}): ${i.key}` +
+          (i.planOps.length > 0 ? ` — fix: ${i.planOps.length} deleteRelation` : ' — advisory'),
+      );
     }
   }
   lines.push('');

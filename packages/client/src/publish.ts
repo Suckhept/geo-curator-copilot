@@ -62,6 +62,10 @@ export function serializePlanOps(planOps: readonly PlanOp[]): { ops: Op[]; skipp
         ops.push(grcDeleteEntity(geoId(planOp.id, 'deleteEntity')));
         break;
       }
+      case 'deleteRelation': {
+        ops.push(grcDeleteRelation(geoId(planOp.id, 'deleteRelation')));
+        break;
+      }
       case 'replaceRelation': {
         if (planOp.deleteRelationId !== undefined) {
           ops.push(grcDeleteRelation(geoId(planOp.deleteRelationId, 'deleteRelation')));

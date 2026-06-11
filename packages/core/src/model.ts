@@ -110,12 +110,16 @@ export interface DuplicateReport {
   clusters: DuplicateCluster[];
   /** Pairs in the likely/weak band — human review, never auto-merged. */
   reviewPairs: ReviewPair[];
+  /** Duplicate relations/values inside a single entity (curator lint). */
+  intraEntity: IntraEntityIssue[];
   stats: {
     checked: number;
     clusters: number;
     duplicate: number;
     likely: number;
     weak: number;
+    intraRelationDuplicates: number;
+    intraValueDuplicates: number;
   };
 }
 
@@ -130,12 +134,31 @@ export type PlanOp =
   | { kind: 'skipDraft'; draftRef: string; canonicalId: string; note: string }
   | { kind: 'useCanonicalId'; draftRef: string; field: string; canonicalId: string; note: string }
   | { kind: 'deleteEntity'; id: GeoId; note: string }
+  | { kind: 'deleteRelation'; id: GeoId; note: string }
   | {
       kind: 'replaceRelation';
       deleteRelationId: GeoId | undefined;
       create: { typeId: GeoId; fromEntityId: GeoId; toEntityId: GeoId };
       note: string;
     };
+
+/**
+ * Intra-entity duplicate: the SAME entity carries several relations with an
+ * identical (typeId, toEntityId) pair, or several values with an identical
+ * (propertyId, value) pair. Relation copies are fixable (deleteRelation ops
+ * for every copy after the first); value copies are advisory — snapshot
+ * values carry no ids to delete by.
+ */
+export interface IntraEntityIssue {
+  entityId: GeoId;
+  entityName: string;
+  kind: 'relation' | 'value';
+  /** Duplicate key, e.g. "typeId -> toEntityId" or "propertyId = text". */
+  key: string;
+  /** Total copies found (>= 2). */
+  count: number;
+  planOps: PlanOp[];
+}
 
 export interface Thresholds {
   duplicate: number;

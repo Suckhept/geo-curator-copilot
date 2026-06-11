@@ -297,3 +297,52 @@ describe('schema-entity guard', () => {
     expect(cluster).toBeDefined();
   });
 });
+
+describe('intra-entity duplicate lint', () => {
+  it('emits deleteRelation ops for repeated (typeId, toEntityId) pairs, keeping the first', () => {
+    const entity = {
+      id: 'a7770000000040008000000000000001',
+      isDraft: false,
+      name: 'Aave V3 core audit',
+      typeIds: [AUDIT_TYPE],
+      values: [],
+      relations: [
+        { id: 'r1110000000040008000000000000001', typeId: AUDITOR_RELATION, toEntityId: SIGMA_PRIME_ID },
+        { id: 'r1110000000040008000000000000002', typeId: AUDITOR_RELATION, toEntityId: SIGMA_PRIME_ID },
+        { id: 'r1110000000040008000000000000003', typeId: AUDITOR_RELATION, toEntityId: SIGMA_PRIME_ID },
+        { id: 'r1110000000040008000000000000004', typeId: PROTOCOL_RELATION, toEntityId: AAVE_ID },
+      ],
+    };
+    const { report } = buildReport({ space: 'test', mode: 'scan', targets: [...cryptoSpaceFixture(), entity], config });
+
+    const issue = report.intraEntity.find(i => i.entityId === entity.id && i.kind === 'relation');
+    expect(issue).toBeDefined();
+    expect(issue!.count).toBe(3);
+    const ids = issue!.planOps.map(op => (op.kind === 'deleteRelation' ? op.id : ''));
+    expect(ids).toEqual(['r1110000000040008000000000000002', 'r1110000000040008000000000000003']);
+    expect(report.stats.intraRelationDuplicates).toBeGreaterThanOrEqual(1);
+    // unique relation (Protocol -> Aave) must not be flagged
+    expect(report.intraEntity.some(i => i.key.includes(AAVE_ID))).toBe(false);
+  });
+
+  it('flags repeated (propertyId, value) pairs as advisory (no ops)', () => {
+    const entity = {
+      id: 'a7770000000040008000000000000002',
+      isDraft: false,
+      name: 'Some dataset',
+      typeIds: [AUDIT_TYPE],
+      values: [
+        { propertyId: REPORT_URL_PROPERTY, text: 'https://example.com/report.pdf' },
+        { propertyId: REPORT_URL_PROPERTY, text: 'https://example.com/report.pdf' },
+      ],
+      relations: [],
+    };
+    const { report } = buildReport({ space: 'test', mode: 'scan', targets: [...cryptoSpaceFixture(), entity], config });
+    const issue = report.intraEntity.find(i => i.entityId === entity.id);
+    expect(issue).toBeDefined();
+    expect(issue!.kind).toBe('value');
+    expect(issue!.count).toBe(2);
+    expect(issue!.planOps).toHaveLength(0);
+    expect(report.stats.intraValueDuplicates).toBeGreaterThanOrEqual(1);
+  });
+});
