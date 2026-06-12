@@ -6,6 +6,7 @@
   "type": "module",
   "engines": { "node": ">=20" },
   "packageManager": "pnpm@11.5.3",
+  "pnpm": { "onlyBuiltDependencies": ["esbuild"] },
   "scripts": {
     "build": "pnpm -r build",
     "test": "vitest run",
