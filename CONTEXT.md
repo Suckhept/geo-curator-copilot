@@ -93,8 +93,12 @@ network (SDK по умолчанию всегда бьёт в mainnet-RPC — э
    company-типам через CLI snapshot (cursor уже умеет), пере-скан.
 2. 261+25 review-пар — прогнать с пользователем глазами, спорное оформить
    отдельными правками.
-3. GitHub-репо: вычистить, README EN, лицензия MIT, CI (vitest), GIF-демо
+3. GitHub-репо: СДЕЛАНО 2026-06-12 (https://github.com/Suckhept/geo-curator-copilot,
+   README EN + Receipts, MIT, CI зелёный, топики). Осталось: GIF-демо
    (пользователь сам умеет GIF/видео — попроси у него).
+3a. После голосования по proposal c8acd570… обновить README: фразу
+   «open for editor vote as of 2026-06-12» заменить на итог
+   (accepted/expired + дата); ссылка-deep-link уже стоит.
 4. Питч: черновик поста (EN) с цифрами 618 дублей; найти актуальные каналы
    Geo (Discord/форум The Graph/Geo) свежим поиском — не полагайся на память.
 5. MCP live-режим и поиск по имени на postgraphile (фильтр
