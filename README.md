@@ -7,7 +7,7 @@ Duplicate detection & QA engine for the [Geo](https://www.geobrowser.io) knowled
 ## Receipts
 
 - **618 duplicate entities** and **103 duplicate relation groups** found across Geo flagship spaces (Crypto, Crypto datasets).
-- A merge proposal built by this engine was submitted through on-chain governance from a regular member account: [Dedup pilot v2: merge 56 duplicate entities](https://www.geobrowser.io/space/5908c73ad336472ccbd983491d2d17e4/governance) — open for editor vote as of 2026-06-12; [live status](https://geocheck.space).
+- A merge proposal built by this engine was submitted through on-chain governance from a regular member account: [Dedup pilot v2: merge 56 duplicate entities](https://www.geobrowser.io/space/5908c73ad336472ccbd983491d2d17e4/governance?proposalId=c8acd570ca364c7d81e2c1aede02d154) — open for editor vote as of 2026-06-12; [live status](https://geocheck.space).
 - Live demo: **<https://geocheck.space>** — paste any Geo space id, get a duplicate report in the browser.
 
 ## How it works
