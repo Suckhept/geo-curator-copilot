@@ -1,7 +1,7 @@
 packages:
   - 'packages/*'
+# pnpm 11 build-script approval: replaces onlyBuiltDependencies (v11 ignores it
+# and scaffolds this key itself on install — verified with 11.5.3 fresh clone)
 allowBuilds:
-  esbuild: set this to true or false
-onlyBuiltDependencies:
-  - esbuild
+  esbuild: true
 verifyDepsBeforeRun: false
